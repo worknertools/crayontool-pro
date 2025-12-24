@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <title>Type play</title>
+    
+
+  </head>
+    
+  <body>
+  <!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crayon Art - Thermal Refined Studio</title>
+    <style>
+        :root {
+            --panel-bg: #ffffff;
+            --accent-color: #000000;
+            --text-color: #111111;
+            --ui-font-size: 9px;
+            --ui-font-weight: 300; 
+            --beige-default: #f5f5dc;
+            --page-bg-default: #000000;
+            /* 核心比例变量：初始为1 */
+            --ui-scale: 1.0; 
+        }
+
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: var(--page-bg-default); 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, sans-serif;
+            color: var(--text-color);
+            -webkit-font-smoothing: antialiased;
+            transition: background 0.4s ease;
+        }
+        
+        #viewport {
+            width: 100vw; height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        /* 画布包装器：所有UI都在其内部定位 */
+        #canvas-wrapper {
+            position: relative;
+            background: transparent !important;
+            cursor: grab;
+            user-select: none;
+            visibility: hidden;
+            /* 确保整体在视觉上也是居中的 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #canvas-wrapper:active { cursor: grabbing; }
+
+        /* 右侧工具栏：RESET + 圆点 */
+        #right-toolbar {
+            position: absolute;
+            left: 100%; /* 锁定在画布右边缘 */
+            bottom: 0;   /* 锁定在画布底边缘 */
+            /* 使用 margin-left 实现与画布的间距，该间距也会随 scale 缩放 */
+            margin-left: 10px; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            padding-bottom: 5px;
+            z-index: 1001;
+            /* 比例锁定核心 */
+            transform: scale(var(--ui-scale));
+            transform-origin: bottom left; 
+        }
+
+        .page-dot, .bg-dot {
+            width: 11px; height: 11px;
+            border-radius: 50%;
+            cursor: pointer;
+            box-sizing: border-box;
+            flex-shrink: 0;
+            border: 1px solid transparent; 
+            display: block;
+            padding: 0;
+            transition: border-color 0.3s ease;
+        }
+
+        .custom-dot { overflow: hidden; position: relative; background: none !important; }
+        .custom-dot input[type="color"] {
+            position: absolute; width: 200%; height: 200%; top: -50%; left: -50%;
+            cursor: pointer; appearance: none; -webkit-appearance: none; border: none; background: none;
+            padding: 0; margin: 0;
+        }
+        .custom-dot input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        .custom-dot input[type="color"]::-webkit-color-swatch { border: none; border-radius: 50%; }
+
+        #btn-reset {
+            width: 24px; height: 85px;
+            background: transparent; border: none; cursor: pointer;
+            display: flex; align-items: flex-end; justify-content: center;
+            padding: 0 0 4px 0;
+            transition: color 0.4s ease;
+        }
+        #btn-reset span {
+            font-size: 6px; font-weight: 400; letter-spacing: 0.5px;
+            writing-mode: vertical-lr; transform: rotate(180deg); white-space: nowrap;
+        }
+
+        /* UI 控件面板 */
+        #ui {
+            position: absolute;
+            left: 0; top: 0; /* 锁定在画布左上角 */
+            width: 145px; background: var(--panel-bg); 
+            padding: 15px 12px; border: none; z-index: 1100; 
+            display: flex; flex-direction: column; cursor: move;
+            user-select: none; box-sizing: border-box;
+            opacity: 0; transition: opacity 0.4s ease;
+            /* 比例锁定核心 */
+            transform: scale(var(--ui-scale)); 
+            transform-origin: top left;
+        }
+
+        .logo { margin: 0 0 15px 0; font-size: 10px; font-weight: 400; letter-spacing: 1.2px; color: #000; pointer-events: none; }
+        .btn-upload { width: 100%; height: 26px; background: var(--accent-color); color: #fff; border: none; font-size: var(--ui-font-size); font-weight: var(--ui-font-weight); letter-spacing: 1px; cursor: pointer; position: relative; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; }
+        .btn-upload input { position: absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor: pointer; }
+        
+        .control { margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; } 
+        .control label { font-size: var(--ui-font-size); font-weight: var(--ui-font-weight); color: #888; flex: 0 0 40px; }
+        .bg-selector { display: flex; gap: 5px; flex: 1; justify-content: flex-end; align-items: center; padding-right: 1px; }
+
+        input[type=range] { width: 75px; height: 1px; background: #ececec; appearance: none; outline: none; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 6px; height: 6px; background: #000; border-radius: 50%; cursor: pointer; }
+        
+        .export-section { border-top: 1px solid #fcfcfc; padding-top: 12px; margin-top: 5px; }
+        .dl-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .dl-row button { background: #fff; border: 1px solid #f0f0f0; padding: 5px 0; font-size: 8px; font-weight: var(--ui-font-weight); cursor: pointer; color: #666; }
+        .dl-row button:hover { border-color: #ccc; color: #000; }
+    </style>
+</head>
+<body>
+
+<div id="viewport">
+    <div id="canvas-wrapper">
+        <!-- 所有UI元素现在都是画布容器的子集 -->
+        <div id="right-toolbar">
+            <button id="btn-reset"><span>RESET</span></button>
+            <div class="page-dot" style="background: #000000;" id="page-black-btn"></div>
+            <div class="page-dot custom-dot" id="page-custom-btn">
+                <input type="color" id="pageCustomInput" value="#ffffff">
+            </div>
+        </div>
+
+        <div id="ui">
+            <div class="logo">Type play</div>
+            <div class="inner-content">
+                <button class="btn-upload">Import<input type="file" id="fileInput" accept="image/*"></button>
+                <div class="control">
+                    <label>BG</label>
+                    <div class="bg-selector" id="bg-picker">
+                        <div class="bg-dot active" style="background:#f5f5dc" data-color="#f5f5dc"></div>
+                        <div class="bg-dot" style="background:#B5EAD7" data-color="#B5EAD7"></div>
+                        <div class="bg-dot" style="background:#ffb7b2" data-color="#ffb7b2"></div>
+                        <div class="bg-dot" style="background:#DBCDF0" data-color="#DBCDF0"></div>
+                        <div class="bg-dot custom-dot" id="main-custom-color-btn">
+                            <input type="color" id="mainCustomColorInput" value="#808080">
+                        </div>
+                    </div>
+                </div>
+                <div class="control"><label>Stroke</label><input type="range" id="p-scale" min="1.0" max="8.0" step="0.1" value="3.5"></div>
+                <div class="control"><label>Offset</label><input type="range" id="p-mess" min="0.0" max="4.0" step="0.01" value="0.0"></div>
+                <div class="control"><label>Therm</label><input type="range" id="p-thermal" min="0.0" max="1.0" step="0.01" value="0.0"></div>
+                <div class="export-section">
+                    <div class="dl-row"><button id="btn-save-jpg">JPG</button><button id="btn-save-png">PNG</button></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<!-- Shader 部分省略，保持原样 -->
+<script id="vertexShader" type="x-shader/x-vertex">
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+</script>
+<script id="fragmentShader" type="x-shader/x-fragment">
+    uniform sampler2D tDiffuse;
+    uniform vec2 resolution;
+    uniform float time;
+    uniform float scale;
+    uniform float messiness; 
+    uniform float thermalStrength; 
+    uniform vec3 canvasColor;
+    uniform float uZoom;
+    uniform vec2 uOffset;
+    uniform float uAlphaToggle;
+    varying vec2 vUv;
+    float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    float noise(vec2 p) {
+        vec2 i = floor(p); vec2 f = fract(p);
+        vec2 u = f*f*(3.0-2.0*f);
+        return mix(mix(hash(i), hash(i + vec2(1.0,0.0)), u.x),
+                   mix(hash(i + vec2(0.0,1.0)), hash(i + vec2(1.0,1.0)), u.x), u.y);
+    }
+    vec3 getThermalColor(float l) {
+        l = clamp(l, 0.0, 1.0);
+        vec3 blue = vec3(0.0, 0.0, 0.5); vec3 cyan = vec3(0.0, 1.0, 1.0);
+        vec3 green = vec3(0.0, 1.0, 0.0); vec3 yellow = vec3(1.0, 1.0, 0.0);
+        vec3 red = vec3(1.0, 0.0, 0.0); vec3 white = vec3(1.0, 1.0, 1.0);
+        if(l < 0.2) return mix(blue, cyan, l/0.2);
+        if(l < 0.4) return mix(cyan, green, (l-0.2)/0.2);
+        if(l < 0.6) return mix(green, yellow, (l-0.4)/0.2);
+        if(l < 0.8) return mix(yellow, red, (l-0.6)/0.2);
+        return mix(red, white, (l-0.8)/0.2);
+    }
+    vec3 getCrayonColor(vec3 c) {
+        vec3 cCyan = vec3(0.0, 0.6, 0.9); vec3 cBlue = vec3(0.1, 0.1, 0.5);
+        vec3 cYellow = vec3(0.95, 0.8, 0.1); vec3 cOrange = vec3(0.9, 0.4, 0.1);
+        vec3 cRed = vec3(0.8, 0.2, 0.2); vec3 cGreen = vec3(0.1, 0.6, 0.3);
+        float lum = dot(c, vec3(0.299, 0.587, 0.114));
+        if(lum > 0.92) return vec3(1.0); 
+        if(lum < 0.15) return cBlue;
+        float dCyan = distance(c, cCyan); float dBlue = distance(c, cBlue);
+        float dYellow = distance(c, cYellow); float dOrange = distance(c, cOrange);
+        float dRed = distance(c, cRed); float dGreen = distance(c, cGreen);
+        float m = min(min(min(dCyan, dBlue), dYellow), min(dOrange, min(dRed, dGreen)));
+        if(m == dCyan) return cCyan; if(m == dBlue) return cBlue;
+        if(m == dYellow) return cYellow; if(m == dOrange) return cOrange;
+        if(m == dRed) return cRed; return cGreen;
+    }
+    float scribble(vec2 uv, float angle, float density) {
+        float s = sin(angle); float c = cos(angle);
+        vec2 rotUV = mat2(c, -s, s, c) * uv;
+        float wobble = noise(uv * 10.0 + time * 0.2) * 0.05;
+        float lines = sin((rotUV.y + wobble) * (density * 50.0));
+        return smoothstep(0.2, 0.4, lines);
+    }
+    void main() {
+        vec2 tUv = (vUv - 0.5 - uOffset) / uZoom + 0.5;
+        vec3 paperColor = canvasColor * 0.98;
+        float ink = 0.0;
+        vec3 finalTargetColor = paperColor;
+        if(tUv.x >= 0.0 && tUv.x <= 1.0 && tUv.y >= 0.0 && tUv.y <= 1.0) {
+            vec4 col = texture2D(tDiffuse, tUv);
+            if(thermalStrength > 0.01) {
+                float blurSize = thermalStrength * 0.02;
+                vec4 blurCol = col;
+                blurCol += texture2D(tDiffuse, tUv + vec2(blurSize, blurSize));
+                blurCol += texture2D(tDiffuse, tUv + vec2(-blurSize, -blurSize));
+                blurCol += texture2D(tDiffuse, tUv + vec2(blurSize, -blurSize));
+                blurCol += texture2D(tDiffuse, tUv + vec2(-blurSize, blurSize));
+                blurCol /= 5.0;
+                float lum = dot(blurCol.rgb, vec3(0.299, 0.587, 0.114));
+                col.rgb = mix(col.rgb, getThermalColor(lum), thermalStrength);
+            }
+            float offsetScale = messiness * 0.012;
+            float r = texture2D(tDiffuse, tUv + vec2(offsetScale, 0.0)).r;
+            float g = col.g;
+            float b = texture2D(tDiffuse, tUv - vec2(offsetScale, 0.0)).b;
+            vec3 rawCol = vec3(r, g, b);
+            if(thermalStrength > 0.5) rawCol = col.rgb;
+            vec3 crayonBase = getCrayonColor(rawCol);
+            float textureGrain = noise(tUv * resolution * 0.5); 
+            float mask = scribble(tUv, 0.5, 11.0 / scale);
+            if(dot(crayonBase, vec3(0.333)) < 0.6) {
+                mask = max(mask, scribble(tUv + vec2(0.3), -0.5, 13.0 / scale));
+            }
+            if(dot(crayonBase, vec3(0.333)) > 0.96) ink = 0.0;
+            else ink = mask * smoothstep(0.3, 0.7, textureGrain + 0.2);
+            finalTargetColor = crayonBase;
+            if(ink > 0.1) finalTargetColor *= 0.93 + 0.07 * noise(tUv * 500.0);
+        }
+        if (uAlphaToggle > 0.5) {
+            gl_FragColor = vec4(finalTargetColor, ink);
+        } else {
+            vec3 result = mix(paperColor, finalTargetColor, ink);
+            gl_FragColor = vec4(result, 1.0);
+        }
+    }
+</script>
+
+<script>
+    let scene, camera, renderer, material, quad;
+    let currentTextureAspect = 0.75;
+    const CANVAS_RATIO = 0.75;
+    let zoom = 1.0;
+    let offset = new THREE.Vector2(0, 0);
+    let defaultCanvas, defaultCtx, defaultTexture;
+    let isDefaultImage = true;
+
+    function getLuminance(hex) {
+        if(!hex || hex === 'transparent') return 0;
+        let r, g, b;
+        if(hex.startsWith('rgb')) {
+            const rgb = hex.match(/\d+/g);
+            r = parseInt(rgb[0]); g = parseInt(rgb[1]); b = parseInt(rgb[2]);
+        } else {
+            r = parseInt(hex.slice(1, 3), 16);
+            g = parseInt(hex.slice(3, 5), 16);
+            b = parseInt(hex.slice(5, 7), 16);
+        }
+        return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    }
+
+    function updatePageUITheme(bgColorHex) {
+        if (!bgColorHex) return;
+        let pageLum = getLuminance(bgColorHex);
+        const resetBtn = document.getElementById('btn-reset');
+        resetBtn.style.color = pageLum > 0.5 ? '#555555' : '#cccccc';
+        const allDots = document.querySelectorAll('.page-dot, .bg-dot');
+        allDots.forEach(dot => {
+            let dotColor = "#000000";
+            if (dot.classList.contains('custom-dot')) {
+                const input = dot.querySelector('input');
+                dotColor = input ? input.value : "#ffffff";
+            } else {
+                const styleBg = dot.style.background;
+                if (styleBg && styleBg.startsWith('rgb')) {
+                    const rgb = styleBg.match(/\d+/g);
+                    dotColor = "#" + rgb.map(x => parseInt(x).toString(16).padStart(2, '0')).join('');
+                } else {
+                    dotColor = dot.dataset.color || "#000000";
+                }
+            }
+            const dotLum = getLuminance(dotColor);
+            const diff = Math.abs(dotLum - pageLum);
+            if (dotLum < pageLum - 0.05) dot.style.borderColor = "transparent";
+            else if (diff < 0.12) dot.style.borderColor = pageLum > 0.5 ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.4)";
+            else if (dotLum > 0.8) dot.style.borderColor = "rgba(0,0,0,0.08)";
+            else dot.style.borderColor = "transparent";
+        });
+    }
+
+    function init() {
+        const wrapper = document.getElementById('canvas-wrapper');
+        scene = new THREE.Scene();
+        camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: true });
+        renderer.setClearColor(0x000000, 0); 
+        renderer.setPixelRatio(window.devicePixelRatio);
+        wrapper.appendChild(renderer.domElement);
+
+        defaultCanvas = document.createElement('canvas');
+        defaultCanvas.width = 600; defaultCanvas.height = 800;
+        defaultCtx = defaultCanvas.getContext('2d');
+        defaultTexture = new THREE.CanvasTexture(defaultCanvas);
+
+        material = new THREE.ShaderMaterial({
+            uniforms: {
+                tDiffuse: { value: defaultTexture },
+                time: { value: 0 }, resolution: { value: new THREE.Vector2() },
+                scale: { value: 3.5 }, messiness: { value: 0.0 }, thermalStrength: { value: 0.0 }, 
+                canvasColor: { value: new THREE.Color('#f5f5dc') },
+                uZoom: { value: 1.0 }, uOffset: { value: new THREE.Vector2(0, 0) },
+                uAlphaToggle: { value: 0.0 }
+            },
+            vertexShader: document.getElementById('vertexShader').textContent,
+            fragmentShader: document.getElementById('fragmentShader').textContent
+        });
+        quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+        scene.add(quad);
+        
+        resize(); setupUI(); initDraggablePanel(); initCanvasTransform(); animate();
+        updatePageUITheme(getComputedStyle(document.body).backgroundColor);
+        
+        setTimeout(() => {
+            wrapper.style.visibility = 'visible';
+            document.getElementById('ui').style.opacity = '1';
+        }, 50);
+    }
+
+    // 默认动画绘制
+    function updateAnimatedDancers(t) {
+        const ctx = defaultCtx;
+        const w = defaultCanvas.width, h = defaultCanvas.height;
+        ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, w, h);
+        const drawFullDancer = (x, y, scale, color, type, timeOffset) => {
+            const localT = t * 2 + timeOffset;
+            ctx.save(); ctx.translate(x, y + Math.sin(localT) * 5); ctx.scale(scale, scale);
+            ctx.fillStyle = ctx.strokeStyle = color; ctx.lineWidth = 14; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            ctx.beginPath(); ctx.arc(Math.cos(localT * 1.5) * 2, -110, 18, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(0, -95); ctx.quadraticCurveTo(Math.sin(localT) * 10, -50, 0, 0); ctx.stroke();
+            if(type === 1) {
+                ctx.beginPath(); ctx.moveTo(0, -85); ctx.quadraticCurveTo(-40, -100 + Math.sin(localT)*20, -70, -60 + Math.cos(localT)*10); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, -85); ctx.quadraticCurveTo(40, -110 + Math.cos(localT)*20, 80, -70 + Math.sin(localT)*10); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(-20, 40, -50 + Math.sin(localT)*10, 80); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(20, 30, 60 + Math.cos(localT)*10, 40); ctx.stroke();
+            } else {
+                ctx.beginPath(); ctx.moveTo(0, -85); ctx.quadraticCurveTo(30, -140 + Math.sin(localT)*10, 60 + Math.cos(localT)*5, -150); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, -85); ctx.quadraticCurveTo(-30, -60, -50 + Math.sin(localT*1.2)*10, -30); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 90 + Math.abs(Math.sin(localT))*10); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(30, 10, 50 + Math.cos(localT)*10, 50); ctx.stroke();
+            }
+            ctx.restore();
+        };
+        drawFullDancer(300, 400, 1.1, '#EF5350', 1, 0);
+        drawFullDancer(140, 550, 0.7, '#42A5F5', 2, 2);
+        drawFullDancer(480, 580, 0.6, '#FFD54F', 1, 4);
+        defaultTexture.needsUpdate = true;
+    }
+
+    function initCanvasTransform() {
+        const wrapper = document.getElementById('canvas-wrapper');
+        let isMoving = false, lastPos = { x: 0, y: 0 };
+        wrapper.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const factor = e.deltaY > 0 ? 0.92 : 1.08;
+            zoom = Math.min(Math.max(zoom * factor, 0.1), 15.0);
+            material.uniforms.uZoom.value = zoom;
+        }, { passive: false });
+        wrapper.addEventListener('mousedown', (e) => {
+            if (e.target === renderer.domElement) { isMoving = true; lastPos = { x: e.clientX, y: e.clientY }; }
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (!isMoving) return;
+            const dx = (e.clientX - lastPos.x) / renderer.domElement.clientWidth / zoom;
+            const dy = (e.clientY - lastPos.y) / renderer.domElement.clientHeight / zoom;
+            offset.x += dx; offset.y -= dy; 
+            material.uniforms.uOffset.value.copy(offset);
+            lastPos = { x: e.clientX, y: e.clientY };
+        });
+        window.addEventListener('mouseup', () => isMoving = false);
+    }
+
+    function setupUI() {
+        document.querySelectorAll('#bg-picker .bg-dot:not(.custom-dot)').forEach(dot => {
+            dot.onclick = () => {
+                document.querySelector('#bg-picker .active')?.classList.remove('active');
+                dot.classList.add('active');
+                material.uniforms.canvasColor.value = new THREE.Color(dot.dataset.color);
+            };
+        });
+        document.getElementById('mainCustomColorInput').oninput = (e) => {
+            document.querySelector('#bg-picker .active')?.classList.remove('active');
+            document.getElementById('main-custom-color-btn').classList.add('active'); 
+            material.uniforms.canvasColor.value = new THREE.Color(e.target.value);
+        };
+        document.getElementById('page-black-btn').onclick = () => {
+            document.body.style.background = '#000000';
+            updatePageUITheme('#000000');
+        };
+        document.getElementById('pageCustomInput').oninput = (e) => {
+            const val = e.target.value;
+            document.body.style.background = val;
+            updatePageUITheme(val);
+        };
+        document.getElementById('p-scale').oninput = (e) => material.uniforms.scale.value = parseFloat(e.target.value);
+        document.getElementById('p-mess').oninput = (e) => material.uniforms.messiness.value = parseFloat(e.target.value);
+        document.getElementById('p-thermal').oninput = (e) => material.uniforms.thermalStrength.value = parseFloat(e.target.value);
+        document.getElementById('btn-reset').onclick = () => {
+            isDefaultImage = true; zoom = 1.0; offset.set(0, 0);
+            material.uniforms.uZoom.value = 1.0;
+            material.uniforms.uOffset.value.set(0, 0);
+            material.uniforms.messiness.value = 0.0;
+            material.uniforms.thermalStrength.value = 0.0;
+            document.getElementById('p-mess').value = 0.0;
+            document.getElementById('p-thermal').value = 0.0;
+            material.uniforms.scale.value = 3.5;
+            document.getElementById('p-scale').value = 3.5;
+            material.uniforms.tDiffuse.value = defaultTexture;
+            material.uniforms.canvasColor.value = new THREE.Color('#f5f5dc');
+            document.getElementById('mainCustomColorInput').value = '#808080';
+            document.querySelector('#bg-picker .active')?.classList.remove('active');
+            document.querySelector('.bg-dot[data-color="#f5f5dc"]')?.classList.add('active');
+            updatePageUITheme(getComputedStyle(document.body).backgroundColor);
+            
+            // 重置UI面板位置到画布左上角
+            const ui = document.getElementById('ui');
+            ui.style.left = "0px"; ui.style.top = "0px";
+        };
+        document.getElementById('fileInput').onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const loader = new THREE.TextureLoader();
+            loader.load(URL.createObjectURL(file), (tex) => {
+                isDefaultImage = false;
+                currentTextureAspect = tex.image.width / tex.image.height;
+                material.uniforms.tDiffuse.value = tex; 
+                zoom = 1.0; offset.set(0, 0);
+                material.uniforms.uZoom.value = 1.0; material.uniforms.uOffset.value.set(0, 0);
+                updateQuadAspect();
+                e.target.value = ""; 
+            });
+        };
+        const exportImg = (isPng) => {
+            const w = 2480, h = 3307;
+            renderer.setSize(w, h); 
+            material.uniforms.resolution.value.set(w, h);
+            if (isPng) material.uniforms.uAlphaToggle.value = 1.0;
+            renderer.render(scene, camera);
+            const link = document.createElement('a');
+            link.download = `Crayon-${Date.now()}.${isPng ? 'png' : 'jpg'}`;
+            link.href = renderer.domElement.toDataURL(isPng ? 'image/png' : 'image/jpeg', 1.0);
+            link.click();
+            material.uniforms.uAlphaToggle.value = 0.0;
+            resize(); 
+        };
+        document.getElementById('btn-save-jpg').onclick = () => exportImg(false);
+        document.getElementById('btn-save-png').onclick = () => exportImg(true);
+    }
+
+    // --- 比例锁定核心函数 ---
+    function resize() {
+        const wrapper = document.getElementById('canvas-wrapper');
+        
+        // 1. 计算当前窗口下画布应有的物理尺寸 (CSS Pixels)
+        // 增加边距预留，确保缩小时有空间容纳UI
+        const availableW = window.innerWidth - 300; 
+        const availableH = window.innerHeight - 150; 
+        
+        let width, height;
+        if (availableW / availableH > CANVAS_RATIO) {
+            height = availableH; width = height * CANVAS_RATIO;
+        } else {
+            width = availableW; height = width / CANVAS_RATIO;
+        }
+
+        // 应用画布物理尺寸
+        wrapper.style.width = width + 'px'; 
+        wrapper.style.height = height + 'px';
+        renderer.setSize(width, height); 
+        material.uniforms.resolution.value.set(width, height);
+        updateQuadAspect();
+
+        // 2. 计算锁定比例 (Scale Factor)
+        // 以 800px 作为 UI 设计的基准高度
+        const baseDesignHeight = 800;
+        let scaleFactor = height / baseDesignHeight;
+        
+        // 严格锁定：UI 缩放率完全等于画布高度相对于基准高度的变化率
+        // 不再设置 min/max 限制，以实现真正的“同步同比例”
+        document.documentElement.style.setProperty('--ui-scale', scaleFactor);
+    }
+
+    function updateQuadAspect() {
+        if (currentTextureAspect > CANVAS_RATIO) quad.scale.set(currentTextureAspect / CANVAS_RATIO, 1, 1);
+        else quad.scale.set(1, CANVAS_RATIO / currentTextureAspect, 1);
+    }
+
+    function initDraggablePanel() {
+        const ui = document.getElementById('ui');
+        let isDragging = false, startPos = { x: 0, y: 0 };
+        ui.addEventListener('mousedown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.closest('.bg-dot') || e.target.closest('.page-dot')) return;
+            isDragging = true; 
+            const rect = ui.getBoundingClientRect();
+            // 获取相对于UI左上角的点击位置
+            startPos.x = e.clientX - rect.left;
+            startPos.y = e.clientY - rect.top;
+        });
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const wrapperRect = document.getElementById('canvas-wrapper').getBoundingClientRect();
+            const scale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ui-scale'));
+            
+            // 计算相对于画布包装器的坐标，需除以缩放系数以修正拖动同步感
+            let left = (e.clientX - wrapperRect.left - startPos.x) / scale;
+            let top = (e.clientY - wrapperRect.top - startPos.y) / scale;
+            
+            ui.style.left = left + 'px'; 
+            ui.style.top = top + 'px';
+        });
+        document.addEventListener('mouseup', () => isDragging = false);
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        const timeValue = Date.now() * 0.001;
+        if (isDefaultImage) updateAnimatedDancers(timeValue);
+        material.uniforms.time.value = Math.floor(Date.now() / 150) * 0.1;
+        renderer.render(scene, camera);
+    }
+    
+    window.addEventListener('load', init);
+    window.addEventListener('resize', resize);
+</script>
+</body>
+</html>
+    
+  </body>
+  
+</html>
